@@ -1,6 +1,6 @@
 import os
-import requests
 import time
+import requests
 from flask import Flask, request, jsonify
 from tempfile import NamedTemporaryFile
 
@@ -62,4 +62,4 @@ def upload():
             "captions_video_url": output_url
         })
     except Exception as e:
-        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
