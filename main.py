@@ -1,8 +1,7 @@
-
-import requests
-from flask import Flask, request, jsonify
 import os
+import requests
 import time
+from flask import Flask, request, jsonify
 from tempfile import NamedTemporaryFile
 
 app = Flask(__name__)
@@ -19,65 +18,48 @@ def upload():
             return jsonify({"error": "Missing video_url"}), 400
 
         tmp = NamedTemporaryFile(delete=False, suffix=".mp4")
-        try:
-            with requests.get(video_url, stream=True) as r:
-                r.raise_for_status()
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        tmp.write(chunk)
-        except Exception as e:
-            return jsonify({"error": "Failed to download video", "details": str(e)}), 500
-        finally:
-            tmp.close()
+        with requests.get(video_url, stream=True) as r:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    tmp.write(chunk)
+        tmp.close()
 
-        try:
-            with open(tmp.name, "rb") as video_file:
-                response = requests.post(
-                    "https://api.captions.ai/api/v1/projects",
-                    headers={"Authorization": f"Bearer {CAPTIONS_API_KEY}"},
-                    files={"file": ("video.mp4", video_file, "video/mp4")},
-                    data={
-                        "name": name,
-                        "template": "Paper",
-                        "music": "true",
-                        "auto_ducking": "true"
-                    },
-                )
-                if response.status_code >= 400:
-                    return jsonify({
-                        "error": "Captions.ai upload failed",
-                        "status_code": response.status_code,
-                        "details": response.text
-                    }), 500
-        except Exception as e:
-            return jsonify({"error": "Exception during Captions.ai upload", "details": str(e)}), 500
+        with open(tmp.name, "rb") as video_file:
+            response = requests.post(
+                "https://api.captions.ai/api/v1/projects",
+                headers={"Authorization": f"Bearer {CAPTIONS_API_KEY}"},
+                files={"file": ("video.mp4", video_file, "video/mp4")},
+                data={
+                    "name": name,
+                    "template": "Paper",
+                    "music": "true",
+                    "auto_ducking": "true"
+                },
+            )
 
-        try:
-            project_id = response.json().get("id")
-            status = "processing"
-            output_url = None
+        if response.status_code >= 400:
+            return jsonify({"error": "Captions.ai failed", "details": response.text}), 500
 
-            while status == "processing":
-                time.sleep(10)
-                check = requests.get(
-                    f"https://api.captions.ai/api/v1/projects/{project_id}",
-                    headers={"Authorization": f"Bearer {CAPTIONS_API_KEY}"}
-                ).json()
+        project_id = response.json().get("id")
+        status = "processing"
+        output_url = None
 
-                status = check.get("status", "")
-                if status == "completed":
-                    output_url = check.get("video_url")
-                    break
-                if status == "failed":
-                    return jsonify({"error": "Captions.ai processing failed"}), 500
+        while status == "processing":
+            time.sleep(10)
+            check = requests.get(
+                f"https://api.captions.ai/api/v1/projects/{project_id}",
+                headers={"Authorization": f"Bearer {CAPTIONS_API_KEY}"}
+            ).json()
+            status = check.get("status", "")
+            if status == "completed":
+                output_url = check.get("video_url")
+                break
+            if status == "failed":
+                return jsonify({"error": "Captions.ai processing failed"}), 500
 
-            return jsonify({
-                "project_id": project_id,
-                "captions_video_url": output_url
-            })
-
-        except Exception as e:
-            return jsonify({"error": "Captions.ai status check failed", "details": str(e)}), 500
-
+        return jsonify({
+            "project_id": project_id,
+            "captions_video_url": output_url
+        })
     except Exception as e:
-        return jsonify({"error": "Unexpected error", "details": str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
