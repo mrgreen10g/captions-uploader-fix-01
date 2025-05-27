@@ -1,7 +1,8 @@
-import os
-import time
+
 import requests
 from flask import Flask, request, jsonify
+import os
+import time
 from tempfile import NamedTemporaryFile
 
 app = Flask(__name__)
@@ -38,7 +39,10 @@ def upload():
             )
 
         if response.status_code >= 400:
-            return jsonify({"error": "Captions.ai failed", "details": response.text}), 500
+            return jsonify({
+                "error": "Captions.ai failed",
+                "details": response.text
+            }), 500
 
         project_id = response.json().get("id")
         status = "processing"
@@ -62,4 +66,4 @@ def upload():
             "captions_video_url": output_url
         })
     except Exception as e:
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
